@@ -16,134 +16,92 @@
  * @return {array} of stored requests.
  */
 const child_process = require("child_process");
-const async = require("async");
 const FindRelayUserByUser = require("./FindRelayUserByUser");
 
-module.exports = function (req, user, options = {}) {
-   return new Promise((resolve, reject) => {
-      let tenantDB = "`appbuilder-admin`";
-      // {string} tenantDB
-      // the DB name of the administrative tenant that manages the other
-      // tenants.
-      // By default it is `appbuilder-admin` but this value can be over
-      // ridden in the  req.connections().site.database  setting.
+module.exports = async function (req, user, options = {}) {
+   let tenantDB = "`appbuilder-admin`";
+   // {string} tenantDB
+   // the DB name of the administrative tenant that manages the other
+   // tenants.
+   // By default it is `appbuilder-admin` but this value can be over
+   // ridden in the  req.connections().site.database  setting.
 
-      const conn = req.connections();
-      if (conn.site && conn.site.database)
-         tenantDB = `\`${conn.site.database}\``;
-      tenantDB += ".";
+   const conn = req.connections();
+   if (conn.site && conn.site.database) tenantDB = `\`${conn.site.database}\``;
+   tenantDB += ".";
 
-      if (!user) {
-         reject(new Error("Invalid userUUID"));
-         return;
+   if (!user) {
+      return new Error("Invalid userUUID");
+   }
+
+   // Check for existing Relay User
+   const [relayUser] = await FindRelayUserByUser(req, user);
+
+   // Generate RSA keys if needed
+   let publicKey, privateKey;
+   if (!relayUser || options.overwriteKeys) {
+      const sslPrivate = child_process.spawnSync("openssl", ["genrsa", "2048"]);
+      if (sslPrivate.error) {
+         req.log("Error generating private key", sslPrivate.error);
       }
+      privateKey = sslPrivate.stdout;
 
-      let relayAccountExists = false;
-      let privateKey, publicKey;
+      var sslPublic = child_process.spawnSync(
+         "openssl",
+         ["rsa", "-outform", "PEM", "-pubout"],
+         { input: privateKey }
+      );
+      if (sslPublic.error) {
+         req.log("Error generating private key", sslPublic.error);
+      }
+      publicKey = sslPublic.stdout;
+   }
 
-      async.series(
-         [
-            // Check for exisiting Realy User
-            (next) => {
-               FindRelayUserByUser(req, user).then((relayUser) => {
-                  if (relayUser.length > 0) {
-                     relayAccountExists = true;
-                  }
-                  next();
-               });
-            },
-            // Generate Private Key
-            (next) => {
-               if (relayAccountExists && !options.overwriteKeys) {
-                  return next();
-               }
-               child_process.exec("openssl genrsa 2048", (err, stdout) => {
-                  if (err) next(err);
-                  else {
-                     privateKey = stdout;
-                     next();
-                  }
-               });
-            },
+   // Create Relay User if needed
+   if (!relayUser) {
+      const createRelaySql = `INSERT INTO ${tenantDB}\`SITE_RELAY_USER\` SET user = ? `;
+      await new Promise((resolve) => {
+         req.query(createRelaySql, user, (error /*, results , fields */) => {
+            if (error) {
+               req.log("Error creating Relay User:", error);
+               req.log(error.sql);
+            }
+            resolve();
+         });
+      });
+   }
 
-            // Generate Public key
-            (next) => {
-               if (relayAccountExists && !options.overwriteKeys) {
-                  return next();
-               }
-               var proc = child_process.exec(
-                  "openssl rsa -outform PEM -pubout",
-                  (err, stdout) => {
-                     if (err) next(err);
-                     else {
-                        publicKey = stdout;
-                        next();
-                     }
-                  }
-               );
-               proc.stdin.write(privateKey);
-               proc.stdin.end();
-            },
+   // Add new registration token
+   const regTokenSql = `
+      UPDATE ${tenantDB}\`SITE_RELAY_USER\`
+      SET registrationToken = SHA2(CONCAT(RAND(), UUID()), 224)
+      WHERE user = ?`;
 
-            //CreateRelayUser
-            (next) => {
-               if (relayAccountExists) {
-                  return next();
-               }
-               const sql = `INSERT INTO ${tenantDB}\`SITE_RELAY_USER\` SET user = ? `;
+   await new Promise((resolve) => {
+      req.query(regTokenSql, [user], (error) => {
+         if (error) {
+            req.log("Error updating registrationToken:", error);
+            req.log(error.sql);
+         }
+         resolve();
+      });
+   });
 
-               req.query(sql, user, (error /*, results , fields */) => {
-                  if (error) {
-                     req.log("Error creating Relay User:", error);
-                     req.log(error.sql);
-                     next(error);
-                  } else {
-                     next();
-                  }
-               });
-            },
-
-            (next) => {
-               // Add new registration token
-               const sql = `
-                  UPDATE ${tenantDB}\`SITE_RELAY_USER\`
-                  SET registrationToken = SHA2(CONCAT(RAND(), UUID()), 224)
-                  WHERE user = ?`;
-               req.query(sql, [user], (error) => {
-                  if (error) {
-                     req.log("Error updating registrationToken:", error);
-                     req.log(error.sql);
-                     next(error);
-                  } else {
-                     next();
-                  }
-               });
-            },
-
-            // Save encryption keys if needed
-            (next) => {
-               if (!privateKey || !publicKey) {
-                  return next();
-               }
-               const sql = `UPDATE ${tenantDB}\`SITE_RELAY_USER\`
+   // Save encryption keys if needed
+   if (privateKey && publicKey) {
+      const rsaKeysSql = `UPDATE ${tenantDB}\`SITE_RELAY_USER\`
                SET rsa_private_key = ?, rsa_public_key = ?
                WHERE user = ?`;
+      await new Promise((resolve) => {
+         req.query(rsaKeysSql, [privateKey, publicKey, user], (error) => {
+            if (error) {
+               req.log("Error updating rsa keys:", error);
+               req.log(error.sql);
+            }
+            resolve();
+         });
+      });
+   }
 
-               req.query(sql, [privateKey, publicKey, user], (error) => {
-                  if (error) {
-                     req.log("Error updating rsa keys:", error);
-                     req.log(error.sql);
-                     next(error);
-                  } else {
-                     next();
-                  }
-               });
-            },
-         ],
-         (err) => {
-            if (err) reject(err);
-            else resolve();
-         }
-      );
-   });
+   return;
 };
