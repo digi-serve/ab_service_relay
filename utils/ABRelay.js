@@ -14,6 +14,7 @@ const DeleteRelayRequestQueue = require("../queries/DeleteRelayRequestQueue");
 const FindAppUserByAppUUID = require("../queries/FindAppUserByAppUUID");
 const FindRequestUserInfo = require("../queries/FindRequestUserInfo");
 const FindPendingRequests = require("../queries/FindPendingRequests");
+const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
 
 var cookieJar = RP.jar();
 
@@ -420,7 +421,7 @@ class ABRelay extends EventEmitter {
                         });
 
                         this._RetryInProcess = true;
-                        this.processRequests(allRequests, function (/* err */) {
+                        this.processRequests(allRequests, (/* err */) => {
                            this._RetryInProcess = false;
                         });
 
@@ -563,87 +564,65 @@ class ABRelay extends EventEmitter {
     * key to use for decoding their packets.
     * This is where we receive and store that key.
     */
-   resolve(entry) {
-      return (
-         Promise.resolve()
-            // make sure we don't already have an entry with the same .appUUID
-            // there should be only one, so don't add a duplicate:
-            .then(() => {
-               return FindAppUserByAppUUID(entry.appUUID);
-            })
+   async resolve(entry) {
+      try {
+         // make sure we don't already have an entry with the same .appUUID
+         // there should be only one, so don't add a duplicate:
+         const [existingAppUser] = await FindAppUserByAppUUID(
+            this._req,
+            entry.appUUID
+         );
+         if (existingAppUser) return;
 
-            // find the ABRelayUser
-            .then((existingAppUser) => {
-               // if we had an existing AppUser, PASS
-               if (existingAppUser) {
-                  return null;
-               }
+         // find the ABRelayUser
+         const [relayUser] = await FindRelayUserByUser(this._req, entry.user);
+         if (!relayUser) return;
 
-               // otherwise continue on
-               if (entry.user) {
-                  return FindRelayUserByUser(entry.user);
-                  // return ABRelayUser.findOne({ user: entry.user });
-               } else {
-                  return null;
-               }
-            })
-            .then((relayUser) => {
-               if (relayUser) {
-                  var key = relayUser.rsa_private_key;
-                  try {
-                     var plaintext = crypto.privateDecrypt(
-                        {
-                           key: key,
-                           //padding: crypto.constants.RSA_NO_PADDING
-                           padding: crypto.constants.RSA_PKCS1_PADDING,
-                           //padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
-                        },
-                        Buffer.from(entry.rsa_aes, "base64")
-                     );
-                     if (plaintext) {
-                        return {
-                           relayUser: relayUser,
-                           aes: plaintext.toString(),
-                        };
-                     } else {
-                        return null;
-                     }
-                  } catch (err) {
-                     // could not decrypt
-                     this._req.notify.developer(err, {
-                        context: "ABRelay:resolve(): Unable to decrypt RSA",
-                        entry,
-                     });
-                     return null;
-                  }
-               } else {
-                  return null;
-               }
-            })
+         let values = null;
 
-            // Now create an AppUser entry connected to relayUser
-            .then((values) => {
-               if (values) {
-                  var newAppUser = {
-                     relayUser: values.relayUser.id,
-                     aes: JSON.parse(values.aes).aesKey,
-                     appUUID: entry.appUUID,
-                     appID: entry.appID,
-                  };
+         const key = relayUser.rsa_private_key;
+         try {
+            const plaintext = crypto.privateDecrypt(
+               {
+                  key: key,
+                  //padding: crypto.constants.RSA_NO_PADDING
+                  padding: crypto.constants.RSA_PKCS1_PADDING,
+                  //padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
+               },
+               Buffer.from(entry.rsa_aes, "base64")
+            );
+            if (plaintext) {
+               values = {
+                  relayUser: relayUser,
+                  aes: plaintext.toString(),
+               };
+            }
+         } catch (err) {
+            // could not decrypt
+            this._req.notify.developer(err, {
+               context: "ABRelay:resolve(): Unable to decrypt RSA",
+               entry,
+            });
+         }
 
-                  CreateAppUser(this._req, newAppUser)
-                     .then(() => {
-                        resolve();
-                     })
-                     .catch((err) => {
-                        this._req.notify.developer(err, {
-                           context:
-                              "ABRelay:resolve():Unable to save New App User entry.",
-                        });
-                        reject(err);
-                     });
+         // Now create an AppUser entry connected to relayUser
+         if (values) {
+            var newAppUser = {
+               relayUser: values.relayUser.id,
+               aes: JSON.parse(values.aes).aesKey,
+               appUUID: entry.appUUID,
+               appID: entry.appID,
+            };
+            try {
+               await CreateAppUser(this._req, newAppUser);
+            } catch (err) {
+               this._req.notify.developer(err, {
+                  context:
+                     "ABRelay:resolve():Unable to save New App User entry.",
+               });
+            }
 
-                  /*
+            /*
                   var relayUser = values.relayUser;
                   relayUser.appUser.add(newAppUser);
 
@@ -663,9 +642,13 @@ class ABRelay extends EventEmitter {
                      });
                   });
                   */
-               }
-            })
-      );
+         }
+      } catch (err) {
+         this._req.notify.developer(err, {
+            context: "ABRelay:resolve(): Error resolving.",
+         });
+      }
+      return;
    }
 
    request(request) {
@@ -692,7 +675,7 @@ class ABRelay extends EventEmitter {
 
             // 0) store this request in our Queue
             .then(() => {
-               return new Promise((resolve, reject) => {
+               return new Promise((resolve /*, reject*/) => {
                   // attempt to create this entry.
                   // if this is a retry, then this will error because the jt already exists,
                   // so just continue on anyway:
