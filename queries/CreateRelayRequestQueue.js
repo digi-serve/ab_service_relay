@@ -13,7 +13,7 @@ const Defaults = {
    request: null,
 };
 
-module.exports = function (req, request) {
+module.exports = function (req, request, tenant) {
    return new Promise((resolve, reject) => {
       let tenantDB = "`appbuilder-admin`";
       // {string} tenantDB
@@ -22,9 +22,13 @@ module.exports = function (req, request) {
       // By default it is `appbuilder-admin` but this value can be over
       // ridden in the  req.connections().site.database  setting.
 
-      let conn = req.connections();
-      if (conn.site && conn.site.database)
-         tenantDB = `\`${conn.site.database}\``;
+      if (tenant) {
+         tenantDB = `\`appbuilder-${tenant}\``;
+      } else {
+         let conn = req.connections();
+         if (conn.site && conn.site.database)
+            tenantDB = `\`${conn.site.database}\``;
+      }
       tenantDB += ".";
 
       var fieldOrder = ["jt", "request"];

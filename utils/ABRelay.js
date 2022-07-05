@@ -72,6 +72,7 @@ class ABRelay extends EventEmitter {
       this.config = null;
 
       this.hasNotifyMccConnection = false;
+      this.tenants = ["admin"];
    }
 
    init(req) {
@@ -395,42 +396,43 @@ class ABRelay extends EventEmitter {
                );
             })
             // 3) check for any old requests in our ABRelayRequestQueue and process them
-            .then(() => {
+            .then(async () => {
                // if we are already processing our retries, then skip
                if (this._RetryInProcess) {
                   return;
                }
 
-               var now = new Date();
-               var seconds = (this.config.mcc.pollFrequency || 5000) * 2;
-               var timeout = new Date(now.getTime() - seconds);
-               return FindPendingRequests(this._req, timeout).then(
-                  (listOfRequests) => {
-                     if (listOfRequests && listOfRequests.length > 0) {
-                        this._req.log(
-                           "ABRelay.Poll():Found Old Requests : " +
-                              listOfRequests.length
-                        );
+               const now = new Date();
+               const seconds = (this.config.mcc.pollFrequency || 5000) * 2;
+               const timeout = new Date(now.getTime() - seconds);
 
-                        // convert requests to array of just request data.
-                        var allRequests = [];
-                        listOfRequests.forEach((req) => {
-                           // Don't log the full error on repeat requests
-                           req.request.suppressErrors = true;
-                           allRequests.push(req.request);
-                        });
+               // need to check each tenant db for pending requests
+               const allRequests = [];
+               await this.tenants.forEach(async (tenant) => {
+                  const listOfRequests = await FindPendingRequests(
+                     this._req,
+                     timeout,
+                     tenant
+                  );
+                  if (listOfRequests && listOfRequests.length > 0) {
+                     this._req.log(
+                        "ABRelay.Poll():Found Old Requests : " +
+                           listOfRequests.length
+                     );
 
-                        this._RetryInProcess = true;
-                        this.processRequests(allRequests, (/* err */) => {
-                           this._RetryInProcess = false;
-                        });
-
-                        // listOfRequests.forEach((req)=>{
-                        //     ABRelay.request(req.request);
-                        // })
-                     }
+                     // convert requests to array of just request data.
+                     listOfRequests.forEach((req) => {
+                        // Don't log the full error on repeat requests
+                        req.request.suppressErrors = true;
+                        allRequests.push(req.request);
+                     });
                   }
-               );
+               });
+
+               this._RetryInProcess = true;
+               this.processRequests(allRequests, (/* err */) => {
+                  this._RetryInProcess = false;
+               });
             })
             .then(resolve)
             .catch((err) => {
@@ -473,16 +475,18 @@ class ABRelay extends EventEmitter {
          */
       };
       allRequests.forEach((row) => {
-         let jobToken = row.jobToken;
+         const jobToken = row.jobToken;
          jobs[jobToken] = jobs[jobToken] || {};
          jobs[jobToken][row.packet || 0] = row;
       });
-      var assembledRequests = [];
-      for (let jobToken in jobs) {
-         let thisJob = jobs[jobToken];
-         let somePacket = Object.values(thisJob)[0];
-         let totalPackets = somePacket.totalPackets || 1;
-         let appUUID = somePacket.appUUID;
+      const assembledRequests = [];
+      for (const jobToken in jobs) {
+         1;
+         const thisJob = jobs[jobToken];
+         const somePacket = Object.values(thisJob)[0];
+         const totalPackets = somePacket.totalPackets || 1;
+         const appUUID = somePacket.appUUID;
+         const tenant = somePacket.tenantUUID;
          let finalData = "";
          for (let i = 0; i < totalPackets; i++) {
             if (thisJob[i]) {
@@ -497,6 +501,7 @@ class ABRelay extends EventEmitter {
                   context: message,
                   jobToken,
                   appUUID,
+                  tenant,
                });
             }
          }
@@ -504,6 +509,7 @@ class ABRelay extends EventEmitter {
             appUUID: appUUID,
             jobToken: jobToken,
             data: finalData,
+            tenant,
          });
       }
 
@@ -518,7 +524,7 @@ class ABRelay extends EventEmitter {
             // all done:
             cb();
          } else {
-            var request = list.shift();
+            const request = list.shift();
             this.request(request)
                .then(() => {
                   processRequestSequential(list, cb);
@@ -535,8 +541,8 @@ class ABRelay extends EventEmitter {
 
       // decide how many in parallel we will allow:
       // NOTE : we can run out of memory if we allow too many.
-      var numParallel = this.config.mcc.numParallelRequests || 15;
-      var numDone = 0;
+      const numParallel = this.config.mcc.numParallelRequests || 15;
+      let numDone = 0;
       function onDone(err) {
          if (err) {
             done(err);
@@ -566,16 +572,22 @@ class ABRelay extends EventEmitter {
     */
    async resolve(entry) {
       try {
+         const tenant = entry.tenantUUID;
          // make sure we don't already have an entry with the same .appUUID
          // there should be only one, so don't add a duplicate:
          const [existingAppUser] = await FindAppUserByAppUUID(
             this._req,
-            entry.appUUID
+            entry.appUUID,
+            tenant
          );
          if (existingAppUser) return;
 
          // find the ABRelayUser
-         const [relayUser] = await FindRelayUserByUser(this._req, entry.user);
+         const [relayUser] = await FindRelayUserByUser(
+            this._req,
+            entry.user,
+            tenant
+         );
          if (!relayUser) return;
 
          let values = null;
@@ -614,34 +626,13 @@ class ABRelay extends EventEmitter {
                appID: entry.appID,
             };
             try {
-               await CreateAppUser(this._req, newAppUser);
+               await CreateAppUser(this._req, newAppUser, tenant);
             } catch (err) {
                this._req.notify.developer(err, {
                   context:
                      "ABRelay:resolve():Unable to save New App User entry.",
                });
             }
-
-            /*
-                  var relayUser = values.relayUser;
-                  relayUser.appUser.add(newAppUser);
-
-                  // I wish .save() was a promise
-                  return new Promise((resolve, reject) => {
-                     relayUser.save((err) => {
-                        if (err) {
-                           ADCore.error.log(
-                              "AppBuilder:ABRelay:.resolve():Unable to save New App User entry.",
-                              { error: err, newAppUser: newAppUser }
-                           );
-                           reject(err);
-                           return;
-                        }
-
-                        resolve();
-                     });
-                  });
-                  */
          }
       } catch (err) {
          this._req.notify.developer(err, {
@@ -656,9 +647,10 @@ class ABRelay extends EventEmitter {
       //     appUUID:'uuid',
       //     data: '<encryptedData>',
       //     jobToken: 'uuid',
+      //     tenant: 'uuid'
       //     suppressErrors: boolean, // if true then don't log the full error
       // }
-
+      const tenant = request.tenant;
       // var appUser = null;
       // var relayUser = null;
 
@@ -679,10 +671,14 @@ class ABRelay extends EventEmitter {
                   // attempt to create this entry.
                   // if this is a retry, then this will error because the jt already exists,
                   // so just continue on anyway:
-                  CreateRelayRequestQueue(this._req, {
-                     jt: request.jobToken,
-                     request: request,
-                  })
+                  CreateRelayRequestQueue(
+                     this._req,
+                     {
+                        jt: request.jobToken,
+                        request: request,
+                     },
+                     tenant
+                  )
                      .then(resolve)
                      .catch(resolve);
                });
@@ -698,29 +694,31 @@ class ABRelay extends EventEmitter {
                // return ABRelayAppUser.findOne({ appUUID: request.appUUID })
                //    .populate("relayUser")
 
-               return FindRequestUserInfo(this._req, request.appUUID).then(
-                  (entry) => {
-                     if (entry) {
-                        // appUser = entry;
-                        // relayUser = entry.relayUser;
-                        UserInfo = entry;
-                     } else {
-                        let message =
-                           "ABRelay:request:(1) can not find ABRelayAppUser for appUUID:" +
-                           request.appUUID;
-                        var error = new Error(message);
-                        if (!request.suppressErrors) {
-                           this._req.notify.developer(error, {
-                              context: message,
-                              appUUID: request.appUUID,
-                           });
-                        }
-                        throw error;
+               return FindRequestUserInfo(
+                  this._req,
+                  request.appUUID,
+                  tenant
+               ).then((entry) => {
+                  if (entry) {
+                     // appUser = entry;
+                     // relayUser = entry.relayUser;
+                     UserInfo = entry;
+                  } else {
+                     let message =
+                        "ABRelay:request:(1) can not find ABRelayAppUser for appUUID:" +
+                        request.appUUID;
+                     var error = new Error(message);
+                     if (!request.suppressErrors) {
+                        this._req.notify.developer(error, {
+                           context: message,
+                           appUUID: request.appUUID,
+                        });
                      }
-
-                     // return entry;
+                     throw error;
                   }
-               );
+
+                  // return entry;
+               });
             })
 
             // 2) Decode the data:
