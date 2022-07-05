@@ -34,7 +34,7 @@ function getQRCodeData(req, token) {
    const tenant = req._tenant ?? "admin";
    if (error) return "";
    else {
-      return `${pwaURL}?JRR=${token}&tenant=${tenant}`;
+      return `${pwaURL}#JRR=${token}#tenant=${tenant}`;
    }
 }
 
