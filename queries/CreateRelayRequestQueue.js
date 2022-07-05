@@ -32,17 +32,11 @@ module.exports = function (req, request) {
       // The order of the fields in the DB.  This is the order they must
       // appear in the values[].
 
-      let values = [];
-      let QM = [];
-      fieldOrder.forEach((f) => {
-         if (typeof request[f] != "undefined") {
-            values.push(request[f]);
-         } else {
-            values.push(Defaults[f]);
-         }
-         QM.push("?");
-      });
-
+      let values = [
+         request.jt ? request.jt : Defaults.jt,
+         JSON.stringify(request.request ? request.request : Defaults.request),
+      ];
+      let QM = ["?", "?"];
       let sql = `INSERT INTO ${tenantDB}\`SITE_RELAY_REQUEST_QUEUE\` ( createdAt, ${fieldOrder.join(
          ", "
       )}) VALUES ( NOW(), ${QM.join(", ")} ) `;
