@@ -37,8 +37,8 @@ module.exports = function (req, request, tenant) {
       // appear in the values[].
 
       let values = [
-         request.jt ? request.jt : Defaults.jt,
-         JSON.stringify(request.request ? request.request : Defaults.request),
+         request.jt ?? Defaults.jt,
+         JSON.stringify(request.request ?? Defaults.request),
       ];
       let QM = ["?", "?"];
       let sql = `INSERT INTO ${tenantDB}\`SITE_RELAY_REQUEST_QUEUE\` ( createdAt, ${fieldOrder.join(

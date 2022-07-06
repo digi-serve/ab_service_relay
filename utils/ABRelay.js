@@ -416,8 +416,7 @@ class ABRelay extends EventEmitter {
                   );
                   if (listOfRequests && listOfRequests.length > 0) {
                      this._req.log(
-                        "ABRelay.Poll():Found Old Requests : " +
-                           listOfRequests.length
+                        `ABRelay.Poll():Found Old Requests : ${listOfRequests.length}`
                      );
 
                      // convert requests to array of just request data.
@@ -696,9 +695,7 @@ class ABRelay extends EventEmitter {
                      // relayUser = entry.relayUser;
                      UserInfo = entry;
                   } else {
-                     let message =
-                        "ABRelay:request:(1) can not find ABRelayAppUser for appUUID:" +
-                        request.appUUID;
+                     let message = `ABRelay:request:(1) can not find ABRelayAppUser for appUUID:${request.appUUID}`;
                      var error = new Error(message);
                      if (!request.suppressErrors) {
                         this._req.notify.developer(error, {
