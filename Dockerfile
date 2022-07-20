@@ -1,5 +1,5 @@
 ##
-## digiserve/ab-relay:develop
+## digiserve/ab-relay
 ##
 ## This is our microservice for managing communications with our MCC relay server.
 ##
@@ -9,9 +9,15 @@
 ## $ docker push digiserve/ab-relay:develop
 ##
 
-FROM digiserve/service-cli:develop
+ARG BRANCH=master
 
-RUN git clone --recursive https://github.com/Hiro-Nakamura/ab_service_relay.git app && cd app && npm install
+FROM digiserve/service-cli:${BRANCH}
+
+COPY . /app
+
+WORKDIR /app
+
+RUN npm i -f
 
 WORKDIR /app
 
