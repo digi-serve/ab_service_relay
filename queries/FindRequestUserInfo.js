@@ -6,21 +6,17 @@
  * @param {string} AppUUID
  *        The UUID of the requested device install.  A User's device will
  *        create a unique AppUUID.
+ * @param {string} tenant
+ *        The UUID of the tenant that this UserInfo should be pulled from.
  * @return {array} of stored requests.
  */
 
-module.exports = function (req, AppUUID) {
+module.exports = function (req, AppUUID, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "`appbuilder-admin`";
+      let tenantDB = `\`appbuilder-${tenant}\``;
       // {string} tenantDB
-      // the DB name of the administrative tenant that manages the other
-      // tenants.
-      // By default it is `appbuilder-admin` but this value can be over
-      // ridden in the  req.connections().site.database  setting.
+      // the default format for the database name is "appbuilder-[tenantID]"
 
-      let conn = req.connections();
-      if (conn.site && conn.site.database)
-         tenantDB = `\`${conn.site.database}\``;
       tenantDB += ".";
 
       let sql = `SELECT aes, user
