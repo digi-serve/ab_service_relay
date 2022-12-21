@@ -8,18 +8,23 @@
  * If the account already exists, encryption keys will not be overwritten
  * unless requested in the options. The registration token will always be
  * overwritten.
+ * 
+ * SITE_USER.uuid == SITE_RELAY_USER.siteuser_guid
+ * SITE_USER.uuid != SITE_RELAY_USER.user
+ * 
  * @param {ABUtils.reqService} req
  *        the Request Utility created by the service.
- * @param {string} user UUID of the site_user
+ * @param {string} siteUser UUID of the site_user
  * @param {object} options
  * @param {boolean} options.overwriteKeys whether or not to generate rsa keys
  * @return {array} of stored requests.
  */
+const crypto = require("crypto");
 const child_process = require("child_process");
 const FindRelayUserByUser = require("./FindRelayUserByUser");
 
-module.exports = async function (req, user, options = {}) {
-   let tenantDB = "`appbuilder-admin`";
+module.exports = async function (req, siteUser, options = {}) {
+   let tenantDB = "appbuilder-admin";
    // {string} tenantDB
    // the DB name of the administrative tenant that manages the other
    // tenants.
@@ -27,15 +32,14 @@ module.exports = async function (req, user, options = {}) {
    // ridden in the  req.connections().site.database  setting.
 
    const conn = req.connections();
-   if (conn.site && conn.site.database) tenantDB = `\`${conn.site.database}\``;
-   tenantDB += ".";
+   if (conn.site && conn.site.database) tenantDB = conn.site.database;
 
-   if (!user) {
+   if (!siteUser) {
       return new Error("Invalid userUUID");
    }
 
    // Check for existing Relay User
-   const [relayUser] = await FindRelayUserByUser(req, user);
+   const [relayUser] = await FindRelayUserByUser(req, siteUser);
 
    // Generate RSA keys if needed
    let publicKey, privateKey;
@@ -52,16 +56,23 @@ module.exports = async function (req, user, options = {}) {
          { input: privateKey }
       );
       if (sslPublic.error) {
-         req.log("Error generating private key", sslPublic.error);
+         req.log("Error generating public key", sslPublic.error);
       }
       publicKey = sslPublic.stdout;
    }
 
    // Create Relay User if needed
    if (!relayUser) {
-      const createRelaySql = `INSERT INTO ${tenantDB}\`SITE_RELAY_USER\` SET user = ? `;
+      const createRelaySql = `
+         INSERT INTO ??.SITE_RELAY_USER 
+         SET
+            user = ?,
+            siteuser_guid = ?
+      `;
       await new Promise((resolve) => {
-         req.query(createRelaySql, user, (error /*, results , fields */) => {
+         // mccUserID and siteUser UUID should be different.
+         let mccUserID = crypto.randomUUID();
+         req.query(createRelaySql, [tenantDB, mccUserID, siteUser], (error /*, results , fields */) => {
             if (error) {
                req.log("Error creating Relay User:", error);
                req.log(error.sql);
@@ -73,12 +84,12 @@ module.exports = async function (req, user, options = {}) {
 
    // Add new registration token
    const regTokenSql = `
-      UPDATE ${tenantDB}\`SITE_RELAY_USER\`
+      UPDATE ??.SITE_RELAY_USER
       SET registrationToken = SHA2(CONCAT(RAND(), UUID()), 224)
-      WHERE user = ?`;
+      WHERE siteuser_guid = ?`;
 
    await new Promise((resolve) => {
-      req.query(regTokenSql, [user], (error) => {
+      req.query(tenantDB, regTokenSql, [siteUser], (error) => {
          if (error) {
             req.log("Error updating registrationToken:", error);
             req.log(error.sql);
@@ -89,11 +100,11 @@ module.exports = async function (req, user, options = {}) {
 
    // Save encryption keys if needed
    if (privateKey && publicKey) {
-      const rsaKeysSql = `UPDATE ${tenantDB}\`SITE_RELAY_USER\`
+      const rsaKeysSql = `UPDATE ??.SITE_RELAY_USER
                SET rsa_private_key = ?, rsa_public_key = ?
-               WHERE user = ?`;
+               WHERE siteuser_guid = ?`;
       await new Promise((resolve) => {
-         req.query(rsaKeysSql, [privateKey, publicKey, user], (error) => {
+         req.query(rsaKeysSql, [tenantDB, privateKey, publicKey, siteUser], (error) => {
             if (error) {
                req.log("Error updating rsa keys:", error);
                req.log(error.sql);

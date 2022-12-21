@@ -1,6 +1,6 @@
 /**
  * user-qr
- * our Request handler.
+ * Initialize a relay user account and post it to the relay server.
  */
 const InitializeRelayUser = require("../queries/InitializeRelayUser");
 const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
@@ -27,10 +27,11 @@ module.exports = {
     */
    fn: async function handler(req, cb) {
       try {
-         const siteUser = req._user.uuid;
+         const siteUserUUID = req._user.uuid;
 
-         await InitializeRelayUser(req, siteUser);
-         const [relayUser] = await FindRelayUserByUser(req, siteUser);
+         await InitializeRelayUser(req, siteUserUUID);
+         const [relayUser] = await FindRelayUserByUser(req, siteUserUUID);
+         const mccUserUUID = relayUser.user;
          const registrationToken = relayUser.registrationToken;
          const publicKey = relayUser.rsa_public_key;
 
@@ -41,7 +42,7 @@ module.exports = {
          ABRelay.post({
             url: "/mcc/user",
             data: {
-               user: siteUser,
+               user: mccUserUUID,
                tokenHash: hashedToken,
                rsa: publicKey,
             },

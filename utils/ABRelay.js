@@ -15,6 +15,7 @@ const FindAppUserByAppUUID = require("../queries/FindAppUserByAppUUID");
 const FindRequestUserInfo = require("../queries/FindRequestUserInfo");
 const FindPendingRequests = require("../queries/FindPendingRequests");
 const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
+const FindRelayUserByMccUser = require("../queries/FindRelayUserByMccUser");
 
 var cookieJar = RP.jar();
 
@@ -213,9 +214,9 @@ class ABRelay extends EventEmitter {
          url = baseURL + url;
       }
 
-      // Authorization header format: "relay@@@<mcc token>@@@<relayUser UUID>"
+      // Authorization header format: "relay@@@<mcc token>@@@<site_user UUID>"
       var authHeader =
-         "relay@@@" + this.config.mcc.accessToken + "@@@" + relayUser.user;
+         "relay@@@" + this.config.mcc.accessToken + "@@@" + relayUser.siteuser_guid;
 
       var options = {
          method: method,
@@ -568,6 +569,16 @@ class ABRelay extends EventEmitter {
     * a connection with a user's device, they will send us an encrypted aes
     * key to use for decoding their packets.
     * This is where we receive and store that key.
+    * 
+    * @param {object} entry
+    *    A pollMCC() initresolve entry as produced by "GET /mcc/initresolve"
+    *    {
+    *       tenantUUID: <string>,
+    *       appUUID: <string>,
+    *       appID: <string>,
+    *       rsa_aes: <string>,
+    *       user: <string>, // MCC user uuid
+    *    }
     */
    async resolve(entry) {
       try {
@@ -582,9 +593,9 @@ class ABRelay extends EventEmitter {
          if (existingAppUser) return;
 
          // find the ABRelayUser
-         const [relayUser] = await FindRelayUserByUser(
+         const [relayUser] = await FindRelayUserByMccUser(
             this._req,
-            entry.user,
+            entry.user, // MCC user uuid (not site_user uuid)
             tenant
          );
          if (!relayUser) return;
@@ -655,9 +666,9 @@ class ABRelay extends EventEmitter {
 
       var UserInfo = null;
       // {obj}
-      // the useful user info needed to resolve this request
+      // From FindRequestUserInfo() the user info needed to resolve this request
       // .aes : the AES decryption Key
-      // .uuid : the user's uuid in their tenant's site_user table
+      // .siteuser_guid : the user's uuid in their tenant's site_user table
 
       var errorOptions = null;
 

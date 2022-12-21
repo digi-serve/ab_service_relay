@@ -1,4 +1,4 @@
-/*
+/**
  * @query FindRequestUserInfo
  * Pull out the necessary User Info from the given AppUUID.
  * @param {ABUtils.reqService} req
@@ -6,12 +6,17 @@
  * @param {string} AppUUID
  *        The UUID of the requested device install.  A User's device will
  *        create a unique AppUUID.
- * @return {array} of stored requests.
+ * @return {object}
+ *        {
+ *          aes: <string>,
+ *          user: <string>,          // MCC userUUID
+ *          siteuser_guid: <string>, // site userUUID
+ *        }
  */
 
 module.exports = function (req, AppUUID) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "`appbuilder-admin`";
+      let tenantDB = "appbuilder-admin";
       // {string} tenantDB
       // the DB name of the administrative tenant that manages the other
       // tenants.
@@ -20,16 +25,20 @@ module.exports = function (req, AppUUID) {
 
       let conn = req.connections();
       if (conn.site && conn.site.database)
-         tenantDB = `\`${conn.site.database}\``;
-      tenantDB += ".";
+         tenantDB = conn.site.database;
 
-      let sql = `SELECT aes, user
-      FROM ${tenantDB}\`SITE_RELAY_APPUSER\` as au
-         INNER JOIN ${tenantDB}\`SITE_RELAY_USER\` as ru
-            ON au.\`relayUser\` = ru.id
-      WHERE appUUID = ?`;
+      let sql = `
+         SELECT 
+            au.aes, ru.user, ru.siteuser_guid
+         FROM 
+            ??.SITE_RELAY_APPUSER as au
+            INNER JOIN ??.SITE_RELAY_USER as ru
+               ON au.relayUser = ru.id
+         WHERE 
+            appUUID = ?
+      `;
 
-      req.query(sql, [AppUUID], (error, results /*, fields */) => {
+      req.query(sql, [tenantDB, tenantDB, AppUUID], (error, results /*, fields */) => {
          if (error) {
             req.log(`Error Resolving AppUUID[${AppUUID}]`, error);
             req.log(error.sql);

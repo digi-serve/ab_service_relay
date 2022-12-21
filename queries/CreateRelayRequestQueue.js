@@ -15,7 +15,7 @@ const Defaults = {
 
 module.exports = function (req, request, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "`appbuilder-admin`";
+      let tenantDB = "appbuilder-admin";
       // {string} tenantDB
       // the DB name of the administrative tenant that manages the other
       // tenants.
@@ -23,27 +23,27 @@ module.exports = function (req, request, tenant) {
       // ridden in the  req.connections().site.database  setting.
 
       if (tenant) {
-         tenantDB = `\`appbuilder-${tenant}\``;
+         tenantDB = `appbuilder-${tenant}`;
       } else {
          let conn = req.connections();
          if (conn.site && conn.site.database)
-            tenantDB = `\`${conn.site.database}\``;
+            tenantDB = conn.site.database;
       }
-      tenantDB += ".";
 
-      var fieldOrder = ["jt", "request"];
       // {array}
       // The order of the fields in the DB.  This is the order they must
       // appear in the values[].
 
+      let sql = `
+         INSERT INTO ??.SITE_RELAY_REQUEST_QUEUE 
+         ( createdAt, jt, request )
+         VALUES ( NOW(), ?, ? )
+      `;
       let values = [
+         tenantDB,
          request.jt ?? Defaults.jt,
          JSON.stringify(request.request ?? Defaults.request),
       ];
-      let QM = ["?", "?"];
-      let sql = `INSERT INTO ${tenantDB}\`SITE_RELAY_REQUEST_QUEUE\` ( createdAt, ${fieldOrder.join(
-         ", "
-      )}) VALUES ( NOW(), ${QM.join(", ")} ) `;
 
       req.query(sql, values, (error, results /*, fields */) => {
          if (error) {

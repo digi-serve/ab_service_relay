@@ -10,7 +10,7 @@
 
 module.exports = function (req, timeout, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "`appbuilder-admin`";
+      let tenantDB = "appbuilder-admin";
       // {string} tenantDB
       // the DB name of the administrative tenant that manages the other
       // tenants.
@@ -18,17 +18,16 @@ module.exports = function (req, timeout, tenant) {
       // ridden in the  req.connections().site.database  setting.
 
       if (tenant) {
-         tenantDB = `\`appbuilder-${tenant}\``;
+         tenantDB = `appbuilder-${tenant}`;
       } else {
          let conn = req.connections();
          if (conn.site && conn.site.database)
-            tenantDB = `\`${conn.site.database}\``;
+            tenantDB = conn.site.database;
       }
-      tenantDB += ".";
 
-      let sql = `SELECT * FROM ${tenantDB}\`SITE_RELAY_REQUEST_QUEUE\` WHERE createdAt <= ?`;
+      let sql = `SELECT * FROM ??.SITE_RELAY_REQUEST_QUEUE WHERE createdAt <= ?`;
 
-      req.query(sql, [timeout], (error, results /*, fields */) => {
+      req.query(sql, [tenantDB, timeout], (error, results /*, fields */) => {
          if (error) {
             // req.log(sql);
             req.log(error);
