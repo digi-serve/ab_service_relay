@@ -18,9 +18,24 @@
 
 module.exports = function (req, AppUUID, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = `appbuilder-${tenant}`;
+      let conn = req.connections();
+
       // {string} tenantDB
       // the default format for the database name is "appbuilder-[tenantID]"
+      let tenantDB;
+
+      // tenant ID was given
+      if (tenant) {
+         tenantDB = `appbuilder-${tenant}`;
+      }
+      // Use connection DB if available
+      else if (conn.site && conn.site.database) {
+         tenantDB = conn.site.database;
+      }
+      // Final fallback default
+      else {
+         tenantDB = "appbuilder-admin";
+      }
 
       let sql = `
          SELECT 

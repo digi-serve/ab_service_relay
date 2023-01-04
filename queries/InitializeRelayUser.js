@@ -89,7 +89,7 @@ module.exports = async function (req, siteUser, options = {}) {
       WHERE siteuser_guid = ?`;
 
    await new Promise((resolve) => {
-      req.query(tenantDB, regTokenSql, [siteUser], (error) => {
+      req.query(regTokenSql, [tenantDB, siteUser], (error) => {
          if (error) {
             req.log("Error updating registrationToken:", error);
             req.log(error.sql);

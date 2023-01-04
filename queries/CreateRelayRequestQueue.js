@@ -1,4 +1,4 @@
-/*
+/**
  * @query CreateRelayRequestQueue
  * Create a SITE_RELAY_REQUEST_QUEUE entry
  * @param {ABUtils.reqService} req
@@ -15,24 +15,24 @@ const Defaults = {
 
 module.exports = function (req, request, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "appbuilder-admin";
-      // {string} tenantDB
-      // the DB name of the administrative tenant that manages the other
-      // tenants.
-      // By default it is `appbuilder-admin` but this value can be over
-      // ridden in the  req.connections().site.database  setting.
+      let conn = req.connections();
 
+      // {string} tenantDB
+      // the DB name of the tenant.
+      let tenantDB;
+
+      // tenant ID was given
       if (tenant) {
          tenantDB = `appbuilder-${tenant}`;
-      } else {
-         let conn = req.connections();
-         if (conn.site && conn.site.database)
-            tenantDB = conn.site.database;
       }
-
-      // {array}
-      // The order of the fields in the DB.  This is the order they must
-      // appear in the values[].
+      // Use connection DB if available
+      else if (conn.site && conn.site.database) {
+         tenantDB = conn.site.database;
+      }
+      // Final fallback default
+      else {
+         tenantDB = "appbuilder-admin";
+      }
 
       let sql = `
          INSERT INTO ??.SITE_RELAY_REQUEST_QUEUE 

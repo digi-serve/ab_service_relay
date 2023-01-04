@@ -1,4 +1,4 @@
-/*
+/**
  * @query FindAppUserByAppUUID
  * Find an existing AppUser entry by the given AppUUID.
  * @param {ABUtils.reqService} req
@@ -11,18 +11,23 @@
 
 module.exports = function (req, AppUUID, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "appbuilder-admin";
+      let conn = req.connections();
+
       // {string} tenantDB
-      // the DB name of the administrative tenant that manages the other
-      // tenants.
-      // By default it is `appbuilder-admin` but this value can be over
-      // ridden in the  req.connections().site.database  setting.
+      // the DB name of the tenant.
+      let tenantDB;
+
+      // tenant ID was given
       if (tenant) {
          tenantDB = `appbuilder-${tenant}`;
-      } else {
-         let conn = req.connections();
-         if (conn.site && conn.site.database)
-            tenantDB = conn.site.database;
+      }
+      // Use connection DB if available
+      else if (conn.site && conn.site.database) {
+         tenantDB = conn.site.database;
+      }
+      // Final fallback default
+      else {
+         tenantDB = "appbuilder-admin";
       }
 
       let sql = `SELECT * FROM ??.SITE_RELAY_APPUSER WHERE appUUID = ?`;

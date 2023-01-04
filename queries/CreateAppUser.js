@@ -1,4 +1,4 @@
-/*
+/**
  * @query CreateAppUser
  * Create an AppUser entry.
  * @param {ABUtils.reqService} req
@@ -10,19 +10,23 @@
 
 module.exports = function (req, appUser, tenant) {
    return new Promise((resolve, reject) => {
-      let tenantDB = "appbuilder-admin";
-      // {string} tenantDB
-      // the DB name of the administrative tenant that manages the other
-      // tenants.
-      // By default it is `appbuilder-admin` but this value can be over
-      // ridden in the  req.connections().site.database  setting.
+      let conn = req.connections();
 
+      // {string} tenantDB
+      // the DB name of the tenant.
+      let tenantDB;
+
+      // tenant ID was given
       if (tenant) {
          tenantDB = `appbuilder-${tenant}`;
-      } else {
-         let conn = req.connections();
-         if (conn.site && conn.site.database)
-            tenantDB = conn.site.database;
+      }
+      // Use connection DB if available
+      else if (conn.site && conn.site.database) {
+         tenantDB = conn.site.database;
+      }
+      // Final fallback default
+      else {
+         tenantDB = "appbuilder-admin";
       }
 
       let sql = `INSERT INTO ??.SITE_RELAY_APPUSER SET ? `;
