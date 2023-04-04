@@ -2,7 +2,7 @@
 // relay
 // (Appbuilder} A service to handle the communications with our relay server.
 //
-const AB = require("ab-utils");
+const AB = require("@digiserve/ab-utils");
 const ABRelay = require("./utils/ABRelay");
 
 var controller = AB.controller("relay");
