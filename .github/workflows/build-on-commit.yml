@@ -1,4 +1,4 @@
-name: build-on-commit
+name: Build On Commit
 on:
   push:
     branches:
