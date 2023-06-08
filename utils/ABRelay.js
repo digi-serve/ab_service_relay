@@ -56,7 +56,8 @@ var CSRF = {
                   "ABRelay:: unable to get CSRF token: " + err.message
                );
                req.notify.developer(csrfError, { baseURL });
-               reject(csrfError);
+               // reject(csrfError);
+               resolve(null);
             });
       });
    },
@@ -232,7 +233,18 @@ class ABRelay extends EventEmitter {
 
       // CSRF Token
       if (method != "GET") {
-         options.headers["X-CSRF-Token"] = CSRF.token;
+         try {
+            options.headers["X-CSRF-Token"] = CSRF.token;
+         } catch (e) {
+            // CSRF.token is not defined yet.
+            // This is ok, we will just send the request without it. Report
+            // this to the developer.
+            this._req.notify.developer(e, {
+               context:
+                  "ABRelay:_formatServerRequest(): CSRF.token not defined",
+               options,
+            });
+         }
          options.jar = cookieJar;
       }
 
@@ -721,9 +733,17 @@ class ABRelay extends EventEmitter {
                if (method == "GET" || CSRF.token) {
                   return params;
                } else {
-                  return CSRF.fetch(this._req).then((/* token */) => {
-                     return params;
-                  });
+                  try {
+                     return CSRF.fetch(this._req).then((/* token */) => {
+                        return params;
+                     });
+                  } catch (e) {
+                     // CSRF broken, report to developer
+                     this._req.notify.developer(e, {
+                        context: "ABRelay:request:CSRF.fetch() failed",
+                     });
+                  }
+                  return params;
                }
             })
 
@@ -844,9 +864,20 @@ class ABRelay extends EventEmitter {
                                  );
                                  lastError = err;
                                  CSRF.token = null;
-                                 CSRF.fetch(this._req).then((/* token */) => {
-                                    tryIt(attempt + 1, cb);
-                                 });
+                                 // try to get a new CSRF token:
+                                 try {
+                                    CSRF.fetch(this._req).then(
+                                       (/* token */) => {
+                                          tryIt(attempt + 1, cb);
+                                       }
+                                    );
+                                 } catch (e) {
+                                    // CSRF broken, report to developer
+                                    this._req.notify.developer(e, {
+                                       context:
+                                          "ABRelay:request(): CSRF.fetch() failed",
+                                    });
+                                 }
                                  return;
                               }
 
