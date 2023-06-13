@@ -13,17 +13,6 @@
 
 module.exports = function (req, AppUUID, tenant) {
    return new Promise((resolve, reject) => {
-      if (!tenant) {
-         //notify developer
-         this.AB.notify.developer(
-            "FindRequestUserInfo: tenant not provided. Defaulting to admin tenant",
-            {
-               AppUUID,
-            }
-         );
-         // default to admin tenant
-         tenant = "admin";
-      }
       let tenantDB = `\`appbuilder-${tenant}\``;
       // {string} tenantDB
       // the default format for the database name is "appbuilder-[tenantID]"
