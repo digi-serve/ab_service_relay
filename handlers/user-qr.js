@@ -51,7 +51,7 @@ module.exports = {
          });
 
          const deepLink = getQRCodeData(req, registrationToken);
-         const qrCode = await getQRCodeBase64(deepLink);
+         const qrCode = await getQRCodeImage(deepLink);
 
          cb(null, qrCode);
       } catch (e) {
