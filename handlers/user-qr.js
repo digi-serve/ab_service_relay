@@ -17,11 +17,14 @@ module.exports = {
    inputValidation: {},
 
    /**
-    * fn
-    * our Request handler.
+    * Initializes a mobile account and generates the registration QR code for
+    * the given user.
+    * 
+    * The QR code is delivered in a base64 data URL format.
+    * 
     * @param {obj} req
     *        the request object sent by the
-    *        api_sails/api/controllers/relay/user-qr-page.
+    *        api_sails/api/controllers/relay/user-qr.js page.
     * @param {fn} cb
     *        a node style callback(err, results) to send data when job is finished
     */
@@ -48,10 +51,11 @@ module.exports = {
             timeout: 8000,
          }).catch((err) => {
             req.log("Error posting registration token to MCC", err);
+            throw err;
          });
 
          const deepLink = getQRCodeData(req, registrationToken);
-         const qrCode = await getQRCodeImage(deepLink);
+         const qrCode = await getQRCodeDataURL(deepLink);
 
          cb(null, qrCode);
       } catch (e) {
