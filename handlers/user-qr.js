@@ -41,7 +41,7 @@ module.exports = {
          hasher.update(registrationToken);
          const hashedToken = hasher.digest("base64");
 
-         ABRelay.post({
+         await ABRelay.post({
             url: "/mcc/user",
             data: {
                user: siteUser,
@@ -50,8 +50,9 @@ module.exports = {
             },
             timeout: 8000,
          }).catch((err) => {
-            req.log("Error posting registration token to MCC", err);
-            throw err;
+            let message = "Error posting registration token to MCC";
+            req.log(message, err);
+            throw new Error(message);
          });
 
          const deepLink = getQRCodeData(req, registrationToken);
