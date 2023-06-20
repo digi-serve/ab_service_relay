@@ -8,7 +8,6 @@
 const QRCode = require("qrcode");
 
 /**
- * getQRCodeData
  * return the string to be embedded as a QR code
  * @param {string} token the registration token of the user.
  * @return {string}
@@ -16,7 +15,7 @@ const QRCode = require("qrcode");
 function getQRCodeData(req, token) {
    let error;
    if (!token) {
-      error = new Error("Missing parameters to ABMobile.getQRCodeImage");
+      error = new Error("Missing parameters to ABMobile.getQRCodeData");
       error.code = "EMISSINGPARAMS";
       error.details = ["options.token"];
       req.log("ABMobile:getQRCodeData:Missing Data", {
@@ -39,12 +38,16 @@ function getQRCodeData(req, token) {
 }
 
 /**
- * getQRCodeImage
- * return a string with the encoded url data for the QR Code image.
+ * Return the QR Code image as a base64 PNG data URL.
+ * 
+ * A data URL means all the data for the image is found in the URL itself.
+ * The URL does not point to any location.
+ * See https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URLs
+ * 
  * @param {string} data  the data to encode in the QR Code.
  * @return {Promise}  resolved with {string} of QRCode Image.
  */
-function getQRCodeImage(data) {
+function getQRCodeDataURL(data) {
    return new Promise((resolve, reject) => {
       QRCode.toDataURL(data, { margin: 0 }, (err, image) => {
          if (err) reject(err);
@@ -56,13 +59,14 @@ function getQRCodeImage(data) {
 }
 
 /**
- * getQRCodeBase64
- * return the QRCodeImage in Base64 format
+ * Return the QRCodeImage as PNG binary file data.
+ * 
  * @param {string} data  the data to encode in the QR Code.
- * @return {Promise}  resolved with {Base64String} of QRCode Image.
+ * @return {Promise}  resolved with {Buffer} of the QRCode binary image.
  */
-function getQRCodeBase64(data) {
-   return getQRCodeImage(data).then((image) => {
+function getQRCodeImage(data) {
+   return getQRCodeDataURL(data).then((image) => {
+      // Convert the data URL into a binary image.
       var base64QR = image.substring(22);
       var qrcodeBuffer = Buffer.from(base64QR, "base64");
 
@@ -70,7 +74,7 @@ function getQRCodeBase64(data) {
    });
 }
 
-module.exports = { getQRCodeData, getQRCodeImage, getQRCodeBase64 };
+module.exports = { getQRCodeData, getQRCodeDataURL, getQRCodeImage };
 
 // These were from v1, not sure if we need in v2
 
