@@ -5,7 +5,7 @@
 const InitializeRelayUser = require("../queries/InitializeRelayUser");
 const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
 const ABRelay = require("../utils/ABRelay");
-const { getQRCodeData, getQRCodeBase64 } = require("../utils/ABMobile");
+const { getQRCodeData, getQRCodeDataURL } = require("../utils/ABMobile");
 const crypto = require("crypto");
 
 module.exports = {
