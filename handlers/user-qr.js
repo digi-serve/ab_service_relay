@@ -5,7 +5,7 @@
 const InitializeRelayUser = require("../queries/InitializeRelayUser");
 const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
 const ABRelay = require("../utils/ABRelay");
-const { getQRCodeData, getQRCodeBase64 } = require("../utils/ABMobile");
+const { getQRCodeData, getQRCodeDataURL } = require("../utils/ABMobile");
 const crypto = require("crypto");
 
 module.exports = {
@@ -17,11 +17,14 @@ module.exports = {
    inputValidation: {},
 
    /**
-    * fn
-    * our Request handler.
+    * Initializes a mobile account and generates the registration QR code for
+    * the given user.
+    * 
+    * The QR code is delivered in a base64 data URL format.
+    * 
     * @param {obj} req
     *        the request object sent by the
-    *        api_sails/api/controllers/relay/user-qr-page.
+    *        api_sails/api/controllers/relay/user-qr.js page.
     * @param {fn} cb
     *        a node style callback(err, results) to send data when job is finished
     */
@@ -38,7 +41,7 @@ module.exports = {
          hasher.update(registrationToken);
          const hashedToken = hasher.digest("base64");
 
-         ABRelay.post({
+         await ABRelay.post({
             url: "/mcc/user",
             data: {
                user: siteUser,
@@ -47,11 +50,13 @@ module.exports = {
             },
             timeout: 8000,
          }).catch((err) => {
-            req.log("Error posting registration token to MCC", err);
+            let message = "Error posting registration token to MCC";
+            req.log(message, err);
+            throw new Error(message);
          });
 
          const deepLink = getQRCodeData(req, registrationToken);
-         const qrCode = await getQRCodeBase64(deepLink);
+         const qrCode = await getQRCodeDataURL(deepLink);
 
          cb(null, qrCode);
       } catch (e) {
