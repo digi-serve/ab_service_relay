@@ -19,13 +19,20 @@ if (AB.defaults.env("TELEMETRY_PROVIDER", "sentry") == "sentry") {
 var controller = AB.controller("relay");
 
 controller.afterStartup((req, cb) => {
-   ABRelay.init(req)
-      .then(() => {
-         cb();
-      })
-      .catch((err) => {
-         cb(err);
-      });
+   if (AB.defaults.env("RELAY_ENABLE", true)) {
+      ABRelay.init(req)
+         .then(() => {
+            cb();
+         })
+         .catch((err) => {
+            cb(err);
+         });
+      return;
+   }
+   console.log("=================");
+   console.log("RELAY Not Enabled");
+   console.log("=================");
+   cb();
 });
 
 // controller.beforeShutdown((req, cb)=>{ return cb(/* err */) });
