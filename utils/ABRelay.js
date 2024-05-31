@@ -16,6 +16,8 @@ const FindRequestUserInfo = require("../queries/FindRequestUserInfo");
 const FindPendingRequests = require("../queries/FindPendingRequests");
 const FindRelayUserByUser = require("../queries/FindRelayUserByUser");
 
+const NodeRSA = require("node-rsa");
+
 var cookieJar = RP.jar();
 
 const baseURL = "http://api_sails:1337";
@@ -603,21 +605,21 @@ class ABRelay extends EventEmitter {
 
          let values = null;
 
-         const key = relayUser.rsa_private_key;
          try {
-            const plaintext = crypto.privateDecrypt(
-               {
-                  key: key,
-                  //padding: crypto.constants.RSA_NO_PADDING
-                  padding: crypto.constants.RSA_PKCS1_PADDING,
-                  //padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
-               },
-               Buffer.from(entry.rsa_aes, "base64")
-            );
+            const key = relayUser.rsa_private_key;
+            const privateKey = new NodeRSA(key);
+            privateKey.setOptions({
+               encryptionScheme: "pkcs1",
+               environment: "browser",
+            });
+
+            const plaintext = privateKey
+               .decrypt(Buffer.from(entry.rsa_aes, "base64"))
+               .toString("utf8");
             if (plaintext) {
                values = {
                   relayUser: relayUser,
-                  aes: plaintext.toString(),
+                  aes: plaintext,
                };
             }
          } catch (err) {
@@ -627,6 +629,30 @@ class ABRelay extends EventEmitter {
                entry,
             });
          }
+
+         // try {
+         //    const plaintext = crypto.privateDecrypt(
+         //       {
+         //          key: key,
+         //          //padding: crypto.constants.RSA_NO_PADDING
+         //          padding: crypto.constants.RSA_PKCS1_PADDING,
+         //          //padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
+         //       },
+         //       Buffer.from(entry.rsa_aes, "base64")
+         //    );
+         //    if (plaintext) {
+         //       values = {
+         //          relayUser: relayUser,
+         //          aes: plaintext.toString(),
+         //       };
+         //    }
+         // } catch (err) {
+         //    // could not decrypt
+         //    this._req.notify.developer(err, {
+         //       context: "ABRelay:resolve(): Unable to decrypt RSA",
+         //       entry,
+         //    });
+         // }
 
          // Now create an AppUser entry connected to relayUser
          if (values) {
