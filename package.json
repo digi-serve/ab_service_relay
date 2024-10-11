@@ -1,6 +1,6 @@
 {
   "name": "relay",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "(Appbuilder} A service to handle the communications with our relay server.",
   "main": "app.js",
   "author": "Johnny Hausman",
@@ -13,7 +13,7 @@
     "node-rsa": "^1.1.1",
     "qrcode": "^1.5.0",
     "request-promise-native": "^1.0.9",
-    "semver": "^7.6.2"
+    "semver": "^7.6.3"
   },
   "scripts": {
     "test": "run-p lint custom-tests",
