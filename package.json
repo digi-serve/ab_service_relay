@@ -1,6 +1,6 @@
 {
   "name": "relay",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "(Appbuilder} A service to handle the communications with our relay server.",
   "main": "app.js",
   "author": "Johnny Hausman",
