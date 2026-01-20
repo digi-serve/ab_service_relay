@@ -52,7 +52,7 @@ module.exports = {
          }).catch((err) => {
             let message = "Error posting registration token to MCC";
             req.log(message, err);
-            throw new Error(message);
+            // throw new Error(message);
          });
 
          const deepLink = getQRCodeData(req, registrationToken);
